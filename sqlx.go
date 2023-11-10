@@ -51,9 +51,9 @@ func mapper() *reflectx.Mapper {
 
 // isScannable takes the reflect.Type and the actual dest value and returns
 // whether or not it's Scannable.  Something is scannable if:
-//   * it is not a struct
-//   * it implements sql.Scanner
-//   * it has no exported fields
+//   - it is not a struct
+//   - it implements sql.Scanner
+//   - it has no exported fields
 func isScannable(t reflect.Type) bool {
 	if reflect.PtrTo(t).Implements(_scannerInterface) {
 		return true
@@ -264,6 +264,11 @@ func Open(driverName, dataSourceName string) (*DB, error) {
 		return nil, err
 	}
 	return &DB{DB: db, driverName: driverName, Mapper: mapper()}, err
+}
+
+// OpenExist uses already opened connection instead of creating new one.
+func OpenExist(driverName string, raw *sql.DB) *DB {
+	return &DB{DB: raw, driverName: driverName, Mapper: mapper()}
 }
 
 // MustOpen is the same as sql.Open, but returns an *sqlx.DB instead and panics on error.
@@ -647,6 +652,17 @@ func Connect(driverName, dataSourceName string) (*DB, error) {
 	return db, nil
 }
 
+// ConnectExist is the same as Connect, but using already opened connection.
+func ConnectExist(driverName string, raw *sql.DB) (*DB, error) {
+	db := OpenExist(driverName, raw)
+	err := db.Ping()
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+	return db, nil
+}
+
 // MustConnect connects to a database and panics on error.
 func MustConnect(driverName, dataSourceName string) *DB {
 	db, err := Connect(driverName, dataSourceName)
@@ -884,9 +900,9 @@ func structOnlyError(t reflect.Type) error {
 // then each row must only have one column which can scan into that type.  This
 // allows you to do something like:
 //
-//    rows, _ := db.Query("select id from people;")
-//    var ids []int
-//    scanAll(rows, &ids, false)
+//	rows, _ := db.Query("select id from people;")
+//	var ids []int
+//	scanAll(rows, &ids, false)
 //
 // and ids will be a list of the id results.  I realize that this is a desirable
 // interface to expose to users, but for now it will only be exposed via changes
